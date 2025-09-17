@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Galaxy Simulation</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        canvas { display: block; }
+    </style>
+</head>
+<body>
+<script>
+    // Основные настройки сцены
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x000000);
+
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 5000000);
+    camera.position.set(0, 10000, 0); // Начальное положение камеры
+    camera.lookAt(0, 0, 0); // Направление камеры
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    // Управление камерой
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.1;
+
+    // Создание рукавов галактики
+    const armMaterial = new THREE.MeshBasicMaterial({
+        color: 0xffff00,
+        transparent: true,
+        opacity: 1,
+    });
+
+    const armThickness = 100; // Толщина рукавов
+    const numArms = 5; // Количество рукавов
+    const spiralGroup = new THREE.Group();
+    const arms = [];
+
+    for (let i = 0; i < numArms; i++) {
+        const points = [];
+        const a = 200 + Math.random() * 100; // Добавлена случайность tightness
+        const b = 0.1 + Math.random() * 0.2; // Добавлена случайность spread
+
+        for (let theta = 0; theta <= Math.PI * 6; theta += 0.1) {
+            const r = a * Math.exp(b * theta) + Math.random() * 250; // Случайное смещение радиуса
+            const x = r * Math.cos(theta + i * (Math.PI * 2 / numArms)) + Math.random() * 100 - 50;
+            const z = r * Math.sin(theta + i * (Math.PI * 2 / numArms)) + Math.random() * 100 - 50;
+            const y = Math.random() * 100 - 50; // Рандомизация высоты
+            points.push(new THREE.Vector3(x, y, z));
+        }
+
+        const spiralGeometry = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points), 200, armThickness, 8, false);
+        const spiralMesh = new THREE.Mesh(spiralGeometry, armMaterial);
+        arms.push({ mesh: spiralMesh, points });
+        spiralGroup.add(spiralMesh);
+    }
+
+    scene.add(spiralGroup);
+
+    // Создание центральной сферы
+    const sphereRadius = 50 + Math.random() * 250;
+    const sphereMaterial = new THREE.MeshBasicMaterial({
+        color: 0xaaaaaa,
+        transparent: true,
+        opacity: 0.8,
+    });
+
+    const sphereGeometry = new THREE.SphereGeometry(sphereRadius, 32, 32);
+    const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
+
+    scene.add(sphere);
+
+    // Функция для создания звезд
+    function createStars() {
+        const starMaterial = new THREE.MeshBasicMaterial({
+            color: 0xffffff,
+            transparent: true,
+            opacity: 0.9,
+        });
+
+        const starGeometry = new THREE.SphereGeometry(1, 8, 8);
+        const stars = [];
+        const totalStars = 10000;
+        const starsInsideArms = Math.floor(totalStars * 0.2);
+        const starsNearArms = Math.floor(totalStars * 0.6);
+        const starsFarFromArms = totalStars - starsInsideArms - starsNearArms;
+        const coreRadius = sphereRadius + 100;
+        const horizontalLimit = 50000;
+
+        function addStar(position, size) {
+            const star = new THREE.Mesh(starGeometry, starMaterial);
+            star.scale.set(size, size, size);
+            star.position.copy(position);
+            stars.push(star);
+            scene.add(star);
+        }
+
+        function isPositionValid(position, size) {
+            const horizontalDistance = Math.sqrt(position.x ** 2 + position.z ** 2);
+            if (horizontalDistance > horizontalLimit) return false;
+            if (position.length() < coreRadius + size) return false;
+            for (const otherStar of stars) {
+                const distance = position.distanceTo(otherStar.position);
+                if (distance < size + otherStar.scale.x) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        // Звезды внутри рукавов
+        for (let i = 0; i < starsInsideArms; i++) {
+            const arm = arms[Math.floor(Math.random() * arms.length)];
+            const randomPoint = arm.points[Math.floor(Math.random() * arm.points.length)];
+            const size = Math.random() < 0.3 ? 5 : Math.random() < 0.8 ? 10 : 20;
+
+            let position;
+            do {
+                const offsetX = Math.random() * 50 - 25;
+                const offsetY = Math.random() * 40 - 20; // Высота [-20, 20]
+                const offsetZ = Math.random() * 50 - 25;
+                position = new THREE.Vector3(
+                    randomPoint.x + offsetX,
+                    randomPoint.y + offsetY,
+                    randomPoint.z + offsetZ
+                );
+            } while (!isPositionValid(position, size));
+
+            addStar(position, size);
+        }
+
+        // Звезды около рукавов
+        for (let i = 0; i < starsNearArms; i++) {
+            const arm = arms[Math.floor(Math.random() * arms.length)];
+            const randomPoint = arm.points[Math.floor(Math.random() * arm.points.length)];
+            const size = Math.random() < 0.3 ? 5 : Math.random() < 0.8 ? 10 : 20;
+
+            let position;
+            do {
+                const angle = Math.random() * Math.PI * 2;
+                const offset = 250 + Math.random() * 250;
+                const offsetX = offset * Math.cos(angle);
+                const offsetY = Math.random() * 800 - 400; // Высота [-400, 400]
+                const offsetZ = offset * Math.sin(angle);
+
+                position = new THREE.Vector3(
+                    randomPoint.x + offsetX,
+                    randomPoint.y + offsetY,
+                    randomPoint.z + offsetZ
+                );
+            } while (!isPositionValid(position, size));
+
+            addStar(position, size);
+        }
+
+        // Звезды вне рукавов
+        for (let i = 0; i < starsFarFromArms; i++) {
+            const size = Math.random() < 0.3 ? 5 : Math.random() < 0.8 ? 10 : 20;
+
+            let position;
+            do {
+                const angle = Math.random() * Math.PI * 2;
+                const radius = Math.sqrt(Math.random()) * horizontalLimit;
+                const x = radius * Math.cos(angle);
+                const y = Math.random() * 2000 - 1000; // Высота [-1000, 1000]
+                const z = radius * Math.sin(angle);
+
+                position = new THREE.Vector3(x, y, z);
+            } while (!isPositionValid(position, size));
+
+            addStar(position, size);
+        }
+    }
+
+    createStars();
+
+    // Анимация
+    function animate() {
+        requestAnimationFrame(animate);
+        controls.update();
+        renderer.render(scene, camera);
+    }
+
+    animate();
+
+    // Адаптация окна
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+</script>
+</body>
+</html>
