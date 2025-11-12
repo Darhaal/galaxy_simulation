@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Galaxy Simulation</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        canvas { display: block; }
+    </style>
+</head>
+<body>
+<script>
+    // Таблица настроек галактики и звёзд с рандомизацией
+    const GALAXY_SETTINGS = {
+        numStars: 2000,
+        arms: Math.floor(Math.random() * (8 - 3 + 1)) + 3,  // Случайное количество рук от 3 до 8
+        armSpread: Math.random() * (0.6 - 0.2) + 0.2,  // Случайное рассеивание рук от 0.2 до 0.6
+        centerDensity: 1.5,
+        armTightness: 2.5,
+        minDistance: 5,
+        heightScale: 0.1,
+        spiralRatio: 0.95,
+        starSizes: [
+            { size: 0.5, chance: 0.3 },
+            { size: 1, chance: 0.5 },
+            { size: 2, chance: 0.2 }
+        ],        
+        starOpacity: 0.8,
+        starColors: [0xfffffdda, 0xffffff, 0xffdf73ff, 0xff2424a4],
+        centerSphereSizeRange: { min: 5, max: 50 },
+        centerSphereOpacity: 0.6,
+        haloOpacityRange: { min: 0, max: 0.6 }  // Диапазон случайной прозрачности оболочки
+    };
+
+    // Основные настройки сцены
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xaaaaaa);
+
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 50000);
+    camera.position.set(0, 1000, 700);
+
+    const renderer = new THREE.WebGLRenderer();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+
+    // Функция для случайного выбора размера звезды на основе вероятности
+    function getRandomStarSize() {
+        const rand = Math.random();
+        let cumulativeChance = 0;
+        for (const sizeOption of GALAXY_SETTINGS.starSizes) {
+            cumulativeChance += sizeOption.chance;
+            if (rand < cumulativeChance) {
+                return sizeOption.size;
+            }
+        }
+        return GALAXY_SETTINGS.starSizes[GALAXY_SETTINGS.starSizes.length - 1].size; // Возврат последнего размера по умолчанию
+    }
+
+    // Функция для создания галактики
+    function createGalaxy() {
+        const positions = []; // Хранение координат всех звёзд
+
+        // Создание центральной сферы (черная, полупрозрачная)
+        const centerSphereSize = Math.random() * (GALAXY_SETTINGS.centerSphereSizeRange.max - GALAXY_SETTINGS.centerSphereSizeRange.min) + GALAXY_SETTINGS.centerSphereSizeRange.min;
+        const centerMaterial = new THREE.MeshBasicMaterial({
+            color: 0xffffff,
+            transparent: true,
+            opacity: GALAXY_SETTINGS.centerSphereOpacity
+        });
+        const centerGeometry = new THREE.SphereGeometry(centerSphereSize, 32, 32);
+        const centerSphere = new THREE.Mesh(centerGeometry, centerMaterial);
+        scene.add(centerSphere); // Добавляем центральную сферу в сцену
+
+        for (let i = 0; i < GALAXY_SETTINGS.numStars; i++) {
+            let position;
+            let validPosition = false;
+
+            // Определяем, будет ли звезда в спирали или вне её
+            const isSpiral = Math.random() < GALAXY_SETTINGS.spiralRatio;
+
+            while (!validPosition) {
+                if (isSpiral) {
+                    // Генерация звёзд в спирали
+                    const armIndex = Math.floor(Math.random() * GALAXY_SETTINGS.arms);
+                    const baseAngle = (armIndex * (2 * Math.PI)) / GALAXY_SETTINGS.arms;
+
+                    const radius = Math.random() ** GALAXY_SETTINGS.centerDensity * GALAXY_SETTINGS.numStars / 2 / Math.PI;
+                    const theta = baseAngle + GALAXY_SETTINGS.armTightness * Math.log(radius + 1) + (Math.random() - 0.5) * GALAXY_SETTINGS.armSpread;
+                    const phi = Math.acos(1 - 2 * Math.random());
+
+                    const x = radius * Math.sin(phi) * Math.cos(theta);
+                    const z = radius * Math.sin(phi) * Math.sin(theta);
+                    const y = radius * Math.cos(phi) * GALAXY_SETTINGS.heightScale;
+
+                    position = new THREE.Vector3(x, y, z);
+                } else {
+                    // Генерация звёзд вне спирали (внутри сферы)
+                    const radius = Math.random() ** 2 * 10 * GALAXY_SETTINGS.numStars / 2 / Math.PI;
+                    const theta = Math.random() * 2 * Math.PI;
+                    const phi = Math.acos(1 - 2 * Math.random());
+
+                    const x = radius * Math.sin(phi) * Math.cos(theta);
+                    const z = radius * Math.sin(phi) * Math.sin(theta);
+                    const y = radius * Math.cos(phi);
+
+                    position = new THREE.Vector3(x, y, z);
+                }
+
+                // Проверка минимального расстояния и нахождения внутри центральной сферы
+                validPosition = positions.every(existingPosition =>
+                    position.distanceTo(existingPosition) > GALAXY_SETTINGS.minDistance
+                );
+
+                // Дополнительная проверка, чтобы звезды не попадали внутрь центральной сферы
+                if (position.length() < centerSphereSize) {
+                    validPosition = false;
+                }
+            }
+
+            // Сохранение позиции
+            positions.push(position);
+
+            // Случайный цвет и размер звезды
+            const color = GALAXY_SETTINGS.starColors[Math.floor(Math.random() * GALAXY_SETTINGS.starColors.length)];
+            const size = getRandomStarSize();
+            const material = new THREE.MeshBasicMaterial({
+                color,
+                transparent: true,
+                opacity: GALAXY_SETTINGS.starOpacity,
+                emissive: color,   // Свечение
+                emissiveIntensity: 0.5 // Интенсивность свечения
+            });
+
+            // Создание сферы (звезды)
+            const sphereGeometry = new THREE.SphereGeometry(size, 16, 16);
+            const sphere = new THREE.Mesh(sphereGeometry, material);
+
+            // Генерация случайной прозрачности оболочки
+            const haloOpacity = Math.random() * (GALAXY_SETTINGS.haloOpacityRange.max - GALAXY_SETTINGS.haloOpacityRange.min) + GALAXY_SETTINGS.haloOpacityRange.min;
+            const haloMaterial = new THREE.MeshBasicMaterial({
+                color: 0xffcc00,  // Желтый цвет
+                transparent: true,
+                opacity: haloOpacity,  // Случайная прозрачность
+            });
+            const haloGeometry = new THREE.SphereGeometry(size + 0.01, 16, 16);  // Оболочка чуть больше звезды
+            const halo = new THREE.Mesh(haloGeometry, haloMaterial);
+
+            // Установка позиции для звезды и оболочки
+            sphere.position.copy(position);
+            halo.position.copy(position);
+
+            // Добавление звезды и оболочки в сцену
+            scene.add(sphere);
+            scene.add(halo);
+        }
+    }
+
+    // Генерация галактики
+    createGalaxy();
+
+    // Анимация
+    function animate() {
+        requestAnimationFrame(animate);
+
+        scene.rotation.y += 0.0005;
+        scene.rotation.z += 0.00001;
+
+        controls.update();
+        renderer.render(scene, camera);
+    }
+
+    animate();
+
+    // Адаптация окна
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+</script>
+</body>
+</html>

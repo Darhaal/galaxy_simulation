@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Galaxy Simulation</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        canvas { display: block; }
+    </style>
+</head>
+<body>
+<script>
+    // Основные настройки сцены
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x000000);
+
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 5000000);
+    camera.position.set(0, 10000, 0); // Начальное положение камеры
+    camera.lookAt(0, 0, 0); // Направление камеры
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    // Управление камерой
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.1;
+
+    // Создание рукавов галактики
+    const armMaterial = new THREE.MeshBasicMaterial({
+        color: 0xffff00,
+        transparent: true,
+        opacity: 1,
+    });
+
+    const armThickness = 20; // Толщина рукавов
+    const numArms = 5; // Количество рукавов
+    const spiralGroup = new THREE.Group();
+
+    for (let i = 0; i < numArms; i++) {
+        const points = [];
+        const a = 200 + Math.random() * 100; // Добавлена случайность tightness
+        const b = 0.1 + Math.random() * 0.2; // Добавлена случайность spread
+
+        for (let theta = 0; theta <= Math.PI * 6; theta += 0.1) {
+            const r = a * Math.exp(b * theta) + Math.random() * 250; // Случайное смещение радиуса
+            const x = r * Math.cos(theta + i * (Math.PI * 2 / numArms)) + Math.random() * 100 - 50; // Рандомизация x
+            const z = r * Math.sin(theta + i * (Math.PI * 2 / numArms)) + Math.random() * 100 - 50; // Рандомизация z
+            const y = Math.random() * 100 - 50; // Рандомизация высоты
+            points.push(new THREE.Vector3(x, y, z));
+        }
+
+        // Геометрия трубки для каждого рукава
+        const spiralGeometry = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points), 200, armThickness, 8, false);
+        const spiralMesh = new THREE.Mesh(spiralGeometry, armMaterial);
+
+        spiralGroup.add(spiralMesh);
+    }
+
+    scene.add(spiralGroup);
+
+    // Создание центральной черной сферы
+    const sphereRadius = 50 + Math.random() * 250; // Случайный радиус от 25 до 200
+    const sphereMaterial = new THREE.MeshBasicMaterial({
+        color: 0xaaaaaa, // Черный цвет
+        transparent: true,
+        opacity: 0.8, // 80% прозрачности
+    });
+
+    const sphereGeometry = new THREE.SphereGeometry(sphereRadius, 32, 32);
+    const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
+
+    scene.add(sphere); // Добавление сферы в сцену
+
+    // Анимация
+    function animate() {
+        requestAnimationFrame(animate);
+
+        controls.update();
+        renderer.render(scene, camera);
+    }
+
+    animate();
+
+    // Адаптация окна
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+</script>
+</body>
+</html>

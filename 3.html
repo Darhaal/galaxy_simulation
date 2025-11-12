@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Galaxy Simulation</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        canvas { display: block; }
+        #galaxy-info {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            color: white;
+            font-size: 24px;
+            font-family: Arial, sans-serif;
+        }
+        #galaxy-name {
+            position: absolute;
+            top: 5%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 36px;
+            font-family: 'Arial', sans-serif;
+            font-weight: bold;
+        }
+        #buttons {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-family: Arial, sans-serif;
+        }
+        button {
+            margin: 5px;
+            padding: 10px;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            border: 1px solid white;
+            font-size: 14px;
+        }
+        input[type="file"] {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+<div id="galaxy-info">
+    <div id="star-count"></div>
+</div>
+<div id="galaxy-name"></div>
+<div id="buttons">
+    <button id="export-button">Export Galaxy</button>
+    <button id="import-button">Import Galaxy</button>
+    <input type="file" id="import-file" />
+</div>
+
+<script>
+    // Основные настройки сцены
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x000000);
+
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 50000);
+    camera.position.set(0, 1000, 700);
+
+    const renderer = new THREE.WebGLRenderer();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+
+    const galaxyNames = ['Andromeda', 'Milky Way', 'Whirlpool Galaxy', 'Sombrero Galaxy', 'Pinwheel Galaxy'];
+    let randomGalaxyName = galaxyNames[Math.floor(Math.random() * galaxyNames.length)];
+    document.getElementById('galaxy-name').textContent = randomGalaxyName;
+
+    let starCount = 0;
+    let stars = []; // Массив для хранения объектов звезд
+
+    // Функция для создания галактики
+    function createGalaxy(numStars, arms, armSpread, centerDensity, armTightness, minDistance, heightScale, spiralRatio) {
+        const positions = []; // Хранение координат всех звёзд
+        const colorPalette = [0xfffffdda, 0xffffff, 0xffdf73ff, 0xff2424a4];
+
+        // Очищаем сцену перед новой генерацией
+        scene.clear();
+
+        for (let i = 0; i < numStars; i++) {
+            let position;
+            let validPosition = false;
+
+            // Определяем, будет ли звезда в спирали или вне её
+            const isSpiral = Math.random() < spiralRatio; // true, если звезда в спирали
+
+            while (!validPosition) {
+                if (isSpiral) {
+                    // Генерация звёзд в спирали
+                    const armIndex = Math.floor(Math.random() * arms);
+                    const baseAngle = (armIndex * (2 * Math.PI)) / arms;
+
+                    const radius = Math.random() ** centerDensity * numStars / 2 / Math.PI; // Радиус от центра
+                    const theta = baseAngle + armTightness * Math.log(radius + 1) + (Math.random() - 0.5) * armSpread;
+                    const phi = Math.acos(1 - 2 * Math.random());
+
+                    const x = radius * Math.sin(phi) * Math.cos(theta);
+                    const z = radius * Math.sin(phi) * Math.sin(theta);
+                    const y = radius * Math.cos(phi) * heightScale;
+
+                    position = new THREE.Vector3(x, y, z);
+                } else {
+                    // Генерация звёзд вне спирали (внутри сферы)
+                    const radius = Math.random() ** 2 * 10 * numStars / 2 / Math.PI; // Радиус с уменьшением вероятности на больших расстояниях
+                    const theta = Math.random() * 2 * Math.PI; // Случайный угол
+                    const phi = Math.acos(1 - 2 * Math.random()); // Случайное распределение по сфере
+
+                    const x = radius * Math.sin(phi) * Math.cos(theta);
+                    const z = radius * Math.sin(phi) * Math.sin(theta);
+                    const y = radius * Math.cos(phi);
+
+                    position = new THREE.Vector3(x, y, z);
+                }
+
+                // Проверка минимального расстояния
+                validPosition = positions.every(existingPosition =>
+                    position.distanceTo(existingPosition) > minDistance
+                );
+            }
+
+            // Сохранение позиции
+            positions.push(position);
+
+            // Случайный цвет звезды
+            const color = colorPalette[Math.floor(Math.random() * colorPalette.length)];
+            const material = new THREE.MeshBasicMaterial({
+                color,
+                transparent: true,
+                opacity: 0.8
+            });
+
+            // Создание сферы
+            const sphereGeometry = new THREE.SphereGeometry(1, 16, 16);
+            const sphere = new THREE.Mesh(sphereGeometry, material);
+
+            // Установка позиции
+            sphere.position.copy(position);
+
+            // Добавление сферы в сцену
+            scene.add(sphere);
+
+            // Сохранение объекта звезды в массив для последующего экспорта
+            stars.push({
+                position: position,
+                color: color
+            });
+
+            starCount++;
+        }
+
+        // Обновление количества звезд на экране
+        document.getElementById('star-count').textContent = `Stars: ${starCount}`;
+    }
+
+    // Генерация галактики
+    createGalaxy(5000, 5, 0.4, 1.5, 2.5, 5 , 0.1, 0.95); // 80% в спирали, 20% вне спирали
+
+    // Экспорт данных галактики
+    document.getElementById('export-button').addEventListener('click', () => {
+        const data = JSON.stringify({ stars: stars, galaxyName: randomGalaxyName });
+        const blob = new Blob([data], { type: 'application/json' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = 'galaxy.json';
+        link.click();
+    });
+
+    // Импорт данных галактики
+    document.getElementById('import-file').addEventListener('change', (event) => {
+        const file = event.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    if (data && data.stars) {
+                        randomGalaxyName = data.galaxyName || 'Unknown Galaxy';
+                        stars = data.stars;
+
+                        // Очищаем сцену и восстанавливаем галактику
+                        scene.clear();
+                        stars.forEach(star => {
+                            const material = new THREE.MeshBasicMaterial({
+                                color: star.color,
+                                transparent: true,
+                                opacity: 0.8
+                            });
+                            const sphereGeometry = new THREE.SphereGeometry(1, 16, 16);
+                            const sphere = new THREE.Mesh(sphereGeometry, material);
+                            sphere.position.copy(star.position);
+                            scene.add(sphere);
+                        });
+
+                        document.getElementById('galaxy-name').textContent = randomGalaxyName;
+                        starCount = stars.length;
+                        document.getElementById('star-count').textContent = `Stars: ${starCount}`;
+                    } else {
+                        alert('Invalid file format!');
+                    }
+                } catch (err) {
+                    alert('Failed to read file: ' + err);
+                }
+            };
+            reader.readAsText(file);
+        }
+    });
+
+    // Анимация
+    function animate() {
+        requestAnimationFrame(animate);
+
+        scene.rotation.y += 0.0005;
+        scene.rotation.z += 0.00001;
+
+        controls.update();
+        renderer.render(scene, camera);
+    }
+
+    animate();
+
+    // Адаптация окна
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+ document.getElementById('import-button').addEventListener('click', () => {
+        document.getElementById('import-file').click();  // Симуляция клика по input[type="file"]
+    });
+
+    // Слушатель события для обработки файла
+    document.getElementById('import-file').addEventListener('change', (event) => {
+        const file = event.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    if (data && data.stars) {
+                        // Обработка данных из файла
+                        console.log(data);  // Для отладки, чтобы увидеть, что содержится в файле
+
+                        // Здесь вы можете добавить логику для восстановления галактики
+                        // Например, очищаем сцену, восстанавливаем звезды и т. д.
+                    } else {
+                        alert('Invalid file format!');
+                    }
+                } catch (err) {
+                    alert('Failed to read file: ' + err);
+                }
+            };
+            reader.readAsText(file);
+        }
+    });
+</script>
+</body>
+</html>
